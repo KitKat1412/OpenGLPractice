@@ -1,76 +1,88 @@
+
 var gl = null;
 var root = null;
-
+var rotateLight, rotateSpheeah, earth;
 const camera = {
-  position: [10,0,0],
-  up: [0,1,0],
-  gaze: [-1, 0,0],
-  rotation:{
+  rotation: {
     x: 0,
     y: 0
   }
 };
 
-/**
-* loads the shader resources using a utility function
-*/
+//load the shader resources using a utility function
 loadResources({
-  vs: 'shaders/vs.glsl',
-  fs: 'shaders/fs.glsl'
-}).then(function (resources) /*an object containing our keys with the loaded resources*/{
-init(resources);
-render();
+  vs: 'shader/phong.vs.glsl',
+  fs: 'shader/phong.fs.glsl',
+  vs_single: 'shader/single.vs.glsl',
+  fs_single: 'shader/single.fs.glsl',
+  texture: 'textures/earth.jpg'
+}).then(function (resources /*an object containing our keys with the loaded resources*/) {
+  init(resources);
+
+  render(0);
 });
 
-/**
- * initializes OpenGL context, compile shader, and load buffers
- */
 function init(resources) {
   //create a GL context
-  gl = createContext(document.body.clientWidth, document.documentElement.clientHeight - 20);
+  gl = createContext();
+
   //enable depth test to let objects in front occluse objects further away
   gl.enable(gl.DEPTH_TEST);
-  //enable alpha blending
   gl.enable(gl.BLEND);
   gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
-  //create scene graph
   root = createSceneGraph(gl, resources);
   initInteraction(gl.canvas);
 }
 
-/**
-* creates the scene graph
-*/
-function createSceneGraph(gl, resources){
-  //create the root
+function createSceneGraph(gl, resources) {
+  //create scenegraph
   const root = new ShaderSGNode(createProgram(gl, resources.vs, resources.fs));
-  //create the object
-  let spheeah = new MaterialSGNode([new RenderSGNode(makeSphere())]);
-  spheeah.ambient = [0.24725, 0.1995, 0.0745, 1];
-  spheeah.diffuse = [0.75164, 0.60648, 0.22648, 1];
-  spheeah.specular = [0.628281, 0.555802, 0.366065, 1];
-  spheeah.shininess = 0.4;
-  root.append(spheeah);
-  //create the lighting
-  let light = new LightSGNode();
-  light.ambient = [0, 0, 0, 1];
-  light.diffuse = [1, 1, 1, 1];
-  light.specular = [1, 1, 1, 1];
-  light.position = [0, 2, 2];
-  rotateLight = new TransformationSGNode(mat4.create(), [
-    new TransformationSGNode(glm.translate(0,-1.5, 0), [
+
+  function createLightSphere() {
+    return new ShaderSGNode(createProgram(gl, resources.vs_single, resources.fs_single), [
+      new RenderSGNode(makeSphere(.2,10,10))
+    ]);
+  }
+
+  {
+    //TASK 3-6 create white light node at [0, 2, 2]
+    let light = new LightNode();
+    light.ambient = [0, 0, 0, 1];
+    light.diffuse = [1, 1, 1, 1];
+    light.specular = [1, 1, 1, 1];
+    light.position = [0, 2, 2];
+    light.append(createLightSphere());
+    // light.append(new RenderSGNode(makeSphere(.2,10,10)));
+    //TASK 4-1 animated light using rotateLight transformation node
+    rotateLight = new TransformationSGNode(mat4.create(), [
         light
-      ])
     ]);
     root.append(rotateLight);
+  }
+
+
+  {
+    //TASK 2-5 wrap with material node
+    let spheeah = new MaterialSGNode(new AdvancedTextureSGNode(resources.texture,
+      // new RenderSGNode(makeRect(2, 2))
+      new RenderSGNode(makeSphere(.2))
+    ));
+
+    //dark
+    spheeah.ambient = [.7, 0, .7, 1];
+    spheeah.diffuse = [0.7, 0.1, 0.1, 1];
+    spheeah.specular = [0.5, 0.7, 0.5, 1];
+    spheeah.shininess = 0.7;
+    rotateSpheeah = new TransformationSGNode(glm.transform({ translate: [0,-1.5,0], rotateX: -90}), [
+      spheeah
+    ]);
+    root.append(rotateSpheeah);
+  }
 
   return root;
 }
 
-/**
-* allow for user interaction via the mouse
-*/
 function initInteraction(canvas) {
   const mouse = {
     pos: { x : 0, y : 0},
@@ -113,36 +125,124 @@ function initInteraction(canvas) {
   });
 }
 
-/**
-* render one frame
-*/
+
 function render(timeInMilliseconds) {
-  //clear and set the background color
-  gl.clearColor(0.9,0.9,0.9,1.0);
+  checkForWindowResize(gl);
+
+  gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+  //set background color to light gray
+  gl.clearColor(0.9, 0.9, 0.9, 1.0);
   //clear the buffer
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-  //create context
+
+
   const context = createSGContext(gl);
-  //set timeInMilliseconds
-  context.timeInMilliseconds = timeInMilliseconds;
-  //calculate projection Matrix
   context.projectionMatrix = mat4.perspective(mat4.create(), glm.deg2rad(30), gl.drawingBufferWidth / gl.drawingBufferHeight, 0.01, 100);
-  //calculate view Matrix
-  context.viewMatrix = calculateViewMatrix(timeInMilliseconds);
-  // context.viewMatrix = mat4.lookAt(mat4.create(), [0,1,-10], [0,0,0], [0,1,0]);
-  //calculate inverse view Matrix
-  context.invViewMatrix = mat4.invert(mat4.create(), context.viewMatrix);
-  context.sceneMatrix = mat4.multiply(mat4.create(), glm.rotateY(camera.rotation.x), glm.rotateX(camera.rotation.y));
+
+  //ReCap: what does this mean?
+  context.viewMatrix = mat4.lookAt(mat4.create(), [0,1,-10], [0,0,0], [0,1,0]);
+  context.inviewMatrix = mat4.invert(mat4.create(), context.viewMatrix);
+
+  //TASK 0-2 rotate whole scene according to the mouse rotation stored in
+  //camera.rotation.x and camera.rotation.y
+  context.sceneMatrix = mat4.multiply(mat4.create(),
+                            glm.rotateY(camera.rotation.x),
+                            glm.rotateX(camera.rotation.y));
+
+  //TASK 4-2 enable light rotation
+  rotateLight.matrix = glm.rotateY(timeInMilliseconds*0.05);
+  //TASK 5-2 enable light rotation
+  rotateSpheeah.matrix = glm.rotateY(-timeInMilliseconds*0.1)
+
+
   root.render(context);
+
+  //animate
   requestAnimationFrame(render);
 }
 
-function calculateViewMatrix(timeInMilliseconds){
-  var eye, center, up;
+/**
+ * a material node contains the material properties for the underlying models
+ */
+class MaterialNode extends SGNode {
 
-  eye = camera.position;
-  center = vec3.add(vec3.create(), camera.position, camera.gaze);
-  up = camera.up;
+  constructor(children) {
+    super(children);
+    this.ambient = [0.2, 0.2, 0.2, 1.0];
+    this.diffuse = [0.8, 0.8, 0.8, 1.0];
+    this.specular = [0, 0, 0, 1];
+    this.emission = [0, 0, 0, 1];
+    this.shininess = 0.0;
+    this.uniform = 'u_material';
+  }
 
-  return mat4.lookAt(mat4.create(), eye, center, up);
+  setMaterialUniforms(context) {
+    const gl = context.gl,
+      shader = context.shader;
+
+    //TASK 2-3 set uniforms
+    //hint setting a structure element using the dot notation, e.g. u_material.test
+    gl.uniform4fv(gl.getUniformLocation(shader, this.uniform+'.ambient'), this.ambient);
+    gl.uniform4fv(gl.getUniformLocation(shader, this.uniform+'.diffuse'), this.diffuse);
+    gl.uniform4fv(gl.getUniformLocation(shader, this.uniform+'.specular'), this.specular);
+    gl.uniform4fv(gl.getUniformLocation(shader, this.uniform+'.emission'), this.emission);
+    gl.uniform1f(gl.getUniformLocation(shader, this.uniform+'.shininess'), this.shininess);
+  }
+
+  render(context) {
+    this.setMaterialUniforms(context);
+
+    //render children
+    super.render(context);
+  }
+}
+
+/**
+ * a light node represents a light including light position and light properties (ambient, diffuse, specular)
+ * the light position will be transformed according to the current model view matrix
+ */
+class LightNode extends TransformationSGNode {
+
+  constructor(position, children) {
+    super(children);
+    this.position = position || [0, 0, 0];
+    this.ambient = [0, 0, 0, 1];
+    this.diffuse = [1, 1, 1, 1];
+    this.specular = [1, 1, 1, 1];
+    //uniform name
+    this.uniform = 'u_light';
+  }
+
+  /**
+   * computes the absolute light position in world coordinates
+   */
+  computeLightPosition(context) {
+    //transform with the current model view matrix
+    const modelViewMatrix = mat4.multiply(mat4.create(), context.viewMatrix, context.sceneMatrix);
+    const pos = [this.position[0], this.position[1],this.position[2], 1];
+    return vec4.transformMat4(vec4.create(), pos, modelViewMatrix);
+  }
+
+  setLightUniforms(context) {
+    const gl = context.gl,
+      shader = context.shader,
+      position = this.computeLightPosition(context);
+
+    //TASK 3-5 set uniforms
+    gl.uniform4fv(gl.getUniformLocation(shader, this.uniform+'.ambient'), this.ambient);
+    gl.uniform4fv(gl.getUniformLocation(shader, this.uniform+'.diffuse'), this.diffuse);
+    gl.uniform4fv(gl.getUniformLocation(shader, this.uniform+'.specular'), this.specular);
+
+    gl.uniform3f(gl.getUniformLocation(shader, this.uniform+'Pos'), position[0], position[1], position[2]);
+  }
+
+  render(context) {
+    this.setLightUniforms(context);
+
+    //since this a transformation node update the matrix according to my position
+    this.matrix = glm.translate(this.position[0], this.position[1], this.position[2]);
+
+    //render children
+    super.render(context);
+  }
 }

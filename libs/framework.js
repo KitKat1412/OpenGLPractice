@@ -117,7 +117,7 @@ function createContext(width, height) {
   canvas.height = height || 400;
   document.body.appendChild(canvas);
   createHtmlText(canvas)
-  return canvas.getContext('webgl2') || canvas.getContext('experimental-webgl');
+  return canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
 }
 
 /**
@@ -739,11 +739,11 @@ class SetUniformSGNode extends SGNode {
 }
 
 class AdvancedTextureSGNode extends SGNode {
-  constructor(image, textureunit, uniform, children) {
+  constructor(image, children ) {
       super(children);
       this.image = image;
-      this.textureunit = textureunit;
-      this.uniform = uniform;
+      this.textureunit = 0;
+      this.uniform = 'u_tex';
       this.textureId = -1;
   }
 
@@ -808,7 +808,6 @@ class RenderSGNode extends SGNode {
     gl.uniformMatrix4fv(gl.getUniformLocation(shader, 'u_modelView'), false, modelViewMatrix);
     gl.uniformMatrix3fv(gl.getUniformLocation(shader, 'u_normalMatrix'), false, normalMatrix);
     gl.uniformMatrix4fv(gl.getUniformLocation(shader, 'u_projection'), false, projectionMatrix);
-    gl.uniformMatrix3fv(gl.getUniformLocation(shader, 'u_invView'), false, mat3.fromMat4(mat3.create(), context.invViewMatrix));
   }
 
   render(context) {
@@ -898,7 +897,7 @@ class MaterialSGNode extends SGNode {
 
   constructor(children) {
     super(children);
-    this.ambient = [0, 0, 0, 0];
+    this.ambient = [0.2, 0.2, 0.2, 1.0];
     this.diffuse = [0.8, 0.8, 0.8, 1.0];
     this.specular = [0, 0, 0, 1];
     this.emission = [0, 0, 0, 1];
@@ -921,19 +920,6 @@ class MaterialSGNode extends SGNode {
     gl.uniform1f(gl.getUniformLocation(context.shader, this.uniform+'.shininess'), this.shininess);
   }
 
-  unsetMaterialUniforms(context) {
-    const gl = context.gl;
-    //no materials in use
-    if (!context.shader || !isValidUniformLocation(gl.getUniformLocation(context.shader, this.uniform+'.ambient'))) {
-      return;
-    }
-    gl.uniform4fv(gl.getUniformLocation(context.shader, this.uniform+'.ambient'), [0, 0, 0, 0]);
-    gl.uniform4fv(gl.getUniformLocation(context.shader, this.uniform+'.diffuse'), [0, 0, 0, 0]);
-    gl.uniform4fv(gl.getUniformLocation(context.shader, this.uniform+'.specular'), [0, 0, 0, 0]);
-    gl.uniform4fv(gl.getUniformLocation(context.shader, this.uniform+'.emission'), [0, 0, 0, 0]);
-    gl.uniform1f(gl.getUniformLocation(context.shader, this.uniform+'.shininess'), 0);
-  }
-
   render(context) {
     this.setMaterialUniforms(context);
 
@@ -943,8 +929,6 @@ class MaterialSGNode extends SGNode {
     })
     //render children
     super.render(context);
-
-    this.unsetMaterialUniforms(context);
   }
 }
 
@@ -957,9 +941,9 @@ class LightSGNode extends TransformationSGNode {
   constructor(position, children) {
     super(null, children);
     this.position = position || [0, 0, 0];
-    this.ambient = [0.5, 0.5, 0.5, 1];
+    this.ambient = [0, 0, 0, 1];
     this.diffuse = [1, 1, 1, 1];
-    this.specular = [0.8, 0.8, 0.8, 1];
+    this.specular = [1, 1, 1, 1];
     //uniform name
     this.uniform = 'u_light';
 

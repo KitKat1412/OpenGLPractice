@@ -739,11 +739,11 @@ class SetUniformSGNode extends SGNode {
 }
 
 class AdvancedTextureSGNode extends SGNode {
-  constructor(image, children ) {
+  constructor(image, textureunit, uniform, children) {
       super(children);
       this.image = image;
-      this.textureunit = 0;
-      this.uniform = 'u_tex';
+      this.textureunit = textureunit;
+      this.uniform = uniform;
       this.textureId = -1;
   }
 

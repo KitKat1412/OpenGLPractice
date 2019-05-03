@@ -1013,6 +1013,7 @@ function createSGContext(gl, projectionMatrix) {
     gl: gl,
     sceneMatrix: mat4.create(),
     viewMatrix: mat4.create(),
+    invViewMatrix: mat4.create(),
     projectionMatrix: projectionMatrix,
     shader: null
   };
